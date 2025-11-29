@@ -1,0 +1,59 @@
+services:
+  # --- 1. Database Service (MySQL) ---
+  database:
+    container_name: weezer-db-compose 
+    image: mysql:8.0
+    restart: always
+    environment:
+      # Allow root login with no password
+      MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+      # The database name that will be automatically created
+      MYSQL_DATABASE: vacations_db
+      MYSQL_TCP_PORT: 3306
+    ports:
+      - "3008:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+    
+    # Ensures the DB is ready before the backend starts
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s 
+
+  # --- 2. Backend API Service (Node/Express) ---
+  backend:
+    container_name: weezer-backend-compose
+    build: ./backend
+    ports:
+      - "3020:3000"
+    environment:
+      - NODE_ENV=compose
+      - PORT=3000
+      - DB_HOST=database
+      - DB_PORT=3306
+      - DB_USER=root
+      - DB_PASSWORD=
+      - DB_NAME=vacations_db
+      - CLIENT_URL=http://localhost:3012
+      - JWT_SECRET=mysecretkey
+      - DEFAULT_USER_PASSWORD=Vacation123!
+    
+    # CRITICAL FIX 3: Waits for the database to be healthy
+    depends_on:
+      database:
+        condition: service_healthy
+
+  # --- 3. Frontend Service ---
+  frontend:
+    container_name: weezer-frontend-compose
+    build: ./frontend
+    ports:
+      - "3012:5173"
+    depends_on:
+      - backend
+
+volumes:
+  db_data:
